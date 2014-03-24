@@ -1,4 +1,4 @@
-#
+
 # fabfile.py -- install SolrCloud with fabric
 #
 
@@ -18,30 +18,39 @@
 # permissions and limitations under the License.
 
 from fabric.api import *
+from fabric.colors import red, green
 from fabric.contrib.files import *
 from fabric.contrib.project import *
 from sets import Set
 from fabric.task_utils import merge
 import time, os
 
+#env.os_name = 'rhel'
+env.os_name = 'ubuntu'
+
 # define roles for our cluster: 3 zookeeper nodes and 4 solr nodes
 env.roledefs.update({
-    'zookeeper': [ 'vm110', 'vm111', 'vm112' ],
-    'solr': [ 'vm110', 'vm111', 'vm112', 'vm113' ],
+    'zookeeper': [ 'ec2-54-184-116-169.us-west-2.compute.amazonaws.com', ],
+    'solr': [ 'ec2-54-202-243-102.us-west-2.compute.amazonaws.com' ]
 })
 
 # If you have a different username on the nodes, set it here:
-#env.user = "ubuntu"
+env.user = "ubuntu"
+#env.user = "ec2-user"
 
 # URLs to download ZooKeeper and Solr from
-env.zookeeper_url = 'http://www.mirrorservice.org/sites/ftp.apache.org/zookeeper/zookeeper-3.4.5/zookeeper-3.4.5.tar.gz'
-env.solr_url = 'http://www.mirrorservice.org/sites/ftp.apache.org/lucene/solr/4.3.0/solr-4.3.0.tgz'
+env.zookeeper_url = 'http://www.mirrorservice.org/sites/ftp.apache.org/zookeeper/zookeeper-3.4.6/zookeeper-3.4.6.tar.gz'
+env.solr_url = 'http://www.mirrorservice.org/sites/ftp.apache.org/lucene/solr/4.7.0/solr-4.7.0.tgz'
+env.tomcat_url = 'http://www.gaidso.com/apache/tomcat/tomcat-7/v7.0.52/bin/apache-tomcat-7.0.52.tar.gz'
 
 ### You don't need to change anything below here
 
 env.always_use_pty = False
+if env.os_name == 'rhel':
+    env.always_use_pty = True
+ 
 env.forward_agent = True
-env.use_ssh_config = True
+env.use_ssh_config = False
 
 # Name of the directory on the nodes where we install our components,
 # relative to the remote user directory
@@ -52,15 +61,18 @@ env.num_shards = 2
 # prepare local filenames for distribution
 env.zookeeper_tgz = os.path.basename(env.zookeeper_url)
 env.solr_tgz = os.path.basename(env.solr_url)
+env.tomcat_tgz = os.path.basename(env.tomcat_url)
 
 # prepare remote directory names for extracted distributions
 env.my_dir_path = os.path.expanduser("/home/{0}/{1}".format(env.user, MY_DIR_NAME))
 env.zookeeper_dir = os.path.join(env.my_dir_path, re.sub(r'\.tar\.gz$', '', env.zookeeper_tgz))
 env.solr_dir = os.path.join(env.my_dir_path, re.sub(r'\.tgz$', '', env.solr_tgz))
+env.tomcat_dir = os.path.join(env.my_dir_path, re.sub(r'\.tar\.gz$', '', env.tomcat_tgz))
 
 # names for upstart services. Use a prefix to prevent accidentally overwriting a system package
 env.zookeeper_service  = 'my_zookeeper'
 env.solr_service = 'my_solr'
+env.tomcat_service = 'my_tomcat'
 
 # create an 'all' role containing all hosts
 env.roledefs.update({ 'all': merge([], ['zookeeper', 'solr'], [], env.roledefs) })
@@ -86,7 +98,7 @@ def test_ping():
 def copy_ssh_key(ssh_pub_key = "~/.ssh/id_dsa.pub"):
     """ Append a public key to .ssh/authorized_keys on the nodes, for password-less ssh. """
     ssh_pub_key_path = os.path.expanduser(ssh_pub_key)
-    remote = "solr-fabric-key.pem"
+    remote = "allstate.pem"
     put(ssh_pub_key_path, remote)
     run("mkdir -p ~/.ssh")
     run("cat {0} >> ~/.ssh/authorized_keys".format(remote))
@@ -113,15 +125,25 @@ def install_oracle_java():
     # becomes more confusing, which is not ideal for a tutorial.
     # Really, you want to install Java in your VM base image so you
     # can skip all this.
-    execute("create_my_dir")
-    script = os.path.join(env.my_dir_path, "oracle-java6.sh")
-    put("scripts/oracle-java6.sh", script)
-    sudo("bash -x {0}".format(script))
+    if env.os_name == 'rhel':
+	sudo("yum -y install java-1.7.0-openjdk-devel")
+    else:
+        execute("create_my_dir")
+        script = os.path.join(env.my_dir_path, "oracle-java6.sh")
+        put("scripts/oracle-java6.sh", script)
+        sudo("bash -x {0}".format(script))
 
 @roles('all')
 def java_version():
     """ Print the Java version. """
     run("java -version")
+
+def download_tomcat():
+    if os.path.exists(env.tomcat_tgz):
+        puts("{0} already exists".format(env.tomcat_tgz))
+        return
+    local("wget {0}".format(env.tomcat_url))
+
 
 def download_zookeeper():
     """ Download ZooKeeper to the local directory. """
@@ -143,6 +165,11 @@ def copy_zookeeper():
     put(env.zookeeper_tgz, os.path.join(env.my_dir_path, env.zookeeper_tgz))
 
 @roles('solr')
+def copy_tomcat():
+    """ Upload tomcat to the solr. """
+    put(env.tomcat_tgz, os.path.join(env.my_dir_path, env.tomcat_tgz))
+
+@roles('solr')
 def copy_solr():
     """ Upload Solr to the nodes. """
     put(env.solr_tgz,  os.path.join(env.my_dir_path, env.solr_tgz))
@@ -152,6 +179,12 @@ def extract_zookeeper():
     """ Extract ZooKeeper """
     with cd(env.my_dir_path):
         run("tar xf {0}".format(env.zookeeper_tgz))
+
+@roles('solr')
+def extract_tomcat():
+    """ Extract Tomcat """
+    with cd(env.my_dir_path):
+        run("tar xvzf {0}".format(env.tomcat_tgz))
 
 def configure_zookeeper_id(zk_id):
     """ Write the zookeeper node id to the my_id file. """
@@ -315,6 +348,19 @@ def stop_zookeeper():
     sudo("service {0} stop".format(env.zookeeper_service))
 
 @roles('solr')
+def start_tomcat():
+    """ Start Tomcat. """
+    if not "running" in sudo("service {0} status".format(env.tomcat_service)):
+        sudo("service {0} start".format(env.tomcat_service))
+
+@roles('solr')
+def upstart_tomcat():
+    """ Write an Upstart script for Tomcat. """
+    context = { "host": env.host, "user": env.user, "group": env.user, "path": env.tomcat_dir }
+    upload_template(filename='tomcat-upstart.conf', destination='/etc/init/{0}.conf'.format(env.tomcat_service),
+        template_dir=TEMPLATES, context=context, use_sudo=True, use_jinja=True)
+
+@roles('solr')
 def start_solr():
     """ Start Solr. """
     if not "running" in sudo("service {0} status".format(env.solr_service)):
@@ -339,10 +385,25 @@ def solr_status():
 
 ### Below here are top-level tasks
 
+@roles('all')
+def setup_packages():
+    puts(green('Installing Ubuntu packages'))
+    sudo('apt-get update')
+
 def download():
     """ Download ZooKeeper and Solr. """
     execute('download_zookeeper')
     execute('download_solr')
+    execute('download_tomcat')
+
+def install_tomcat():
+    """ Install Tomcat on Solr Nodes """
+    execute('download_tomcat')
+    execute('copy_tomcat')
+    execute('extract_tomcat')
+    #execute('configure_tomcat') 
+    execute('upstart_tomcat')
+    #execute('start_tomcat')
 
 def install_zookeeper():
     """ Install the ZooKeeper nodes. """
