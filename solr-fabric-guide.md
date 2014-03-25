@@ -1,5 +1,5 @@
-Installing Distributed Solr 4 with Fabric
-=========================================
+Installing Distributed Solr 4 with Fabric on Tomcat
+===================================================
 
 Solr 4 has a subset of features that allow it be run as a distributed
 fault-tolerant cluster, referred to as "SolrCloud". Installing and
@@ -130,10 +130,10 @@ java version on all nodes so you can verify it worked. That was easy,
 right?
 
 
-Downloading ZooKeeper and Solr
-------------------------------
+Downloading ZooKeeper, Solr and Tomcat
+--------------------------------------
 
-Download the ZooKeeper and Solr distributions to your local computer:
+Download the ZooKeeper, Solr and Tomcat distributions to your local computer:
 
     fab download
 
@@ -150,6 +150,10 @@ This uploads the ZooKeeper distribution file to your nodes, configures
 each of the nodes, starts them up, and waits for the cluster to elect
 a leader.
 
+Installing Tomcat
+-----------------
+
+    fab install_tomcat
 
 Installing Solr
 ---------------
