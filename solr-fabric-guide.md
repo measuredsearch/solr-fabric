@@ -1,9 +1,6 @@
 Installing Distributed Solr 4 with Fabric
 =========================================
 
-_The latest version of this document is on
-[github.com/LucidWorks/solr-fabric](https://github.com/LucidWorks/solr-fabric/)_
-
 Solr 4 has a subset of features that allow it be run as a distributed
 fault-tolerant cluster, referred to as "SolrCloud". Installing and
 configuring Solr on a multi-node cluster can seem daunting when you're
