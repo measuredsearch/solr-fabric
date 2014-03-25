@@ -1,2 +1,3 @@
-Solr-Fabric
+Solr-Fabric-Tomcat
 Copyright 2013 LucidWorks, Inc.
+Copyright 2014 Measured Search.

@@ -1,5 +1,5 @@
 
-# fabfile.py -- install SolrCloud with fabric
+# fabfile.py -- install SolrCloud with fabric on tomcat
 #
 
 # See the NOTICE file distributed with this work for additional
@@ -16,6 +16,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied.  See the License for the specific language governing
 # permissions and limitations under the License.
+# 
+# Please note that changes have been made to this file by
+# Measured Search to enhance support for deployment using Tomcat
 
 from fabric.api import *
 from fabric.colors import red, green
@@ -403,7 +406,7 @@ def install_tomcat():
     execute('extract_tomcat')
     #execute('configure_tomcat') 
     execute('upstart_tomcat')
-    #execute('start_tomcat')
+    execute('start_tomcat')
 
 def install_zookeeper():
     """ Install the ZooKeeper nodes. """
@@ -414,7 +417,7 @@ def install_zookeeper():
     execute('upstart_zookeeper')
     execute('start_zookeeper')
 
-def install_solr():
+def install_solr_standalone():
     """ Install the Solr nodes. """
     execute('download_solr')
     execute('copy_solr')
@@ -442,7 +445,7 @@ def install_solr_and_zookeeper():
     execute('download')
     execute('install_zookeeper')
     execute('wait_for_zookeeper')
-    execute('install_solr')
+    execute('install_solr_standalone')
     execute('wait_for_solr')
 
 @hosts(env.first_solr)
